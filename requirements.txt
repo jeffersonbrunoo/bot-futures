@@ -1,0 +1,8 @@
+requests
+python-dotenv
+pandas
+schedule
+numpy
+python-telegram-bot
+google-generativeai>=0.1.0
+
