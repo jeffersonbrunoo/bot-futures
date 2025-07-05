@@ -1,0 +1,10 @@
+# Pastas e arquivos temporários do Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ambiente virtual
+venv/
+.venv/
+env/
+ENV/
