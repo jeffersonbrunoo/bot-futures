@@ -1,100 +1,104 @@
-import pytest
 import asyncio
+import pandas as pd
+
 from screener.screener_core import ScreenerCore
 from notifier.telegram_notifier import TelegramNotifier
+from screener.signal_generator import SignalGenerator
+import ai.ai_suggester as ai_suggester
 
 class DummyAPI:
-    """
-    Mock da API principal utilizada pelo ScreenerCore.
-    Simula um único contrato e retorna candles suficientes para os filtros.
-    """
-    async def init(self): 
+    async def init(self):
         return self
 
     async def get_futures_contracts(self):
-        # Simula apenas 1 contrato futuro
         return [{"symbol": "ARPA_USDT"}]
 
     async def get_klines(self, sym, interval, start, end):
-        # Sempre retorna 8 candles válidos para o símbolo solicitado
         return [
-            {"open":1,"high":1.3,"low":1,"close":1.23,"volume":1000},
-            {"open":1.23,"high":1.25,"low":1.2,"close":1.22,"volume":1100},
-            {"open":1.22,"high":1.24,"low":1.21,"close":1.21,"volume":900},
-            {"open":1.21,"high":1.23,"low":1.2,"close":1.22,"volume":950},
-            {"open":1.22,"high":1.24,"low":1.2,"close":1.23,"volume":980},
-            {"open":1.23,"high":1.26,"low":1.22,"close":1.25,"volume":990},
-            {"open":1.25,"high":1.27,"low":1.24,"close":1.26,"volume":1010},
-            {"open":1.26,"high":1.28,"low":1.25,"close":1.27,"volume":1020},
+            {"open": 1,    "high": 1.3, "low": 1.0, "close": 1.23, "volume": 1000},
+            {"open": 1.23, "high": 1.25, "low": 1.2, "close": 1.22, "volume": 1100},
+            {"open": 1.22, "high": 1.24, "low": 1.21,"close": 1.21, "volume": 900},
+            {"open": 1.21, "high": 1.23, "low": 1.2, "close": 1.22, "volume": 950},
+            {"open": 1.22, "high": 1.24, "low": 1.2, "close": 1.23, "volume": 980},
+            {"open": 1.23, "high": 1.26, "low": 1.22,"close": 1.25, "volume": 990},
+            {"open": 1.25, "high": 1.27, "low": 1.24,"close": 1.26, "volume":1010},
+            {"open": 1.26, "high": 1.28, "low": 1.25,"close": 1.27, "volume":1020},
         ]
 
     def klines_to_dataframe(self, candles, sym):
-        # Converte candles em DataFrame para compatibilidade com os filtros reais
-        import pandas as pd
-        return pd.DataFrame(candles)
+        df = pd.DataFrame(candles)
+        df['symbol'] = sym
+        return df
 
-    async def close(self): 
+    async def close(self):
         pass
 
 class DummyNotifier(TelegramNotifier):
-    """
-    Mock do notifier de Telegram. Apenas armazena as mensagens enviadas.
-    """
     def __init__(self):
         self.sent = []
-        self.is_configured = True
 
-    async def send_message(self, msg):
-        # Apenas salva a mensagem para posterior verificação
+    async def send_message(self, msg, parse_mode=None):
         self.sent.append(msg)
 
-@pytest.mark.asyncio
-async def test_screener_includes_suggestion(monkeypatch):
-    """
-    Teste de integração (mock) para validar o fluxo principal do ScreenerCore.
-    Garante que:
-        - O filtro de liquidez não bloqueia o símbolo.
-        - Todos os filtros são forçados a aprovar o dado.
-        - A IA retorna uma sugestão mockada.
-        - O notifier recebe as mensagens corretas.
-    """
+class DummyExtEvaluator:
+    async def evaluate_external_factors(self, symbol, df):
+        return {"anomalous_volume": False, "sentiment": "neutro"}
 
-    # Instancia os mocks para API e Notifier
+class DummySignalGen(SignalGenerator):
+    pass
+
+class DummyAI:
+    @staticmethod
+    def suggest_best_coin(signals):
+        return 'ARPA_USDT'
+
+# Patch dependencies for ScreenerCore
+import pytest
+
+def test_screener_core_full_flow(monkeypatch):
     api = DummyAPI()
     notifier = DummyNotifier()
-    core = ScreenerCore(api, notifier)
+    ext_eval = DummyExtEvaluator()
 
-    # Força a função da IA a retornar um texto fixo (simulando sugestão)
-    from ai.ai_suggester import suggest_best_coin
-    monkeypatch.setattr("ai.ai_suggester.suggest_best_coin", lambda signals: "Minha sugestão de teste")
+    # Instantiate core
+    core = ScreenerCore(api, notifier, ext_eval)
 
-    # Monkeypatch para os filtros principais:
-    #  - Todos aprovam o símbolo (ou criam um sinal fixo)
-    async def always_pass_liquidity(api, syms):
-        return syms
-    monkeypatch.setattr("screener.screener_core.filter_by_liquidez", always_pass_liquidity)
-    monkeypatch.setattr("screener.screener_core.check_context", lambda df: True)
-    monkeypatch.setattr("screener.screener_core.calculate_resistance_h1", lambda df: 1.25)
+    # Patch filter_by_liquidez
+    async def always_pass(api_obj, symbols):
+        return symbols
+    monkeypatch.setattr('screener.filter_engine.filter_by_liquidez', always_pass)
+
+    # Patch SignalGenerator methods
+    monkeypatch.setattr(SignalGenerator, 'check_context', lambda self, df: True)
+    monkeypatch.setattr(SignalGenerator, 'calculate_resistance_h1', lambda self, df: 1.25)
     monkeypatch.setattr(
-        "screener.screener_core.check_trigger",
-        lambda df, resistance: {
-            "symbol": "ARPA_USDT",
-            "entry_price": 1.23,
-            "stop_loss": 1.15,
-            "take_profit": 1.30
+        SignalGenerator,
+        'check_trigger',
+        lambda self, df, res: {
+            'symbol': df['symbol'].iloc[-1],
+            'entry_price': 1.23,
+            'stop_loss': 1.15,
+            'take_profit': 1.30,
+            'indicators': {}
         }
     )
 
-    # Executa o fluxo principal do screener
-    results = await core.run()
+    # Patch ExternalFactorsEvaluator
+    monkeypatch.setattr('screener.external_factors_evaluator.ExternalFactorsEvaluator', DummyExtEvaluator)
 
-    # ---- Asserts para validar comportamento esperado ----
-    # Deve retornar exatamente 1 sinal
-    assert len(results) == 1
-    # O notifier deve ter recebido 2 mensagens
-    assert len(notifier.sent) == 2
-    # A primeira mensagem deve conter a sugestão mockada da IA
-    assert "🤖 *Sugestão da IA:*" in notifier.sent[0]
-    assert "Minha sugestão de teste" in notifier.sent[0]
-    # A segunda mensagem deve ser o relatório de reprovações
-    assert notifier.sent[1].startswith("📊 *Resumo de reprovações:*")
+    # Patch AI suggester
+    monkeypatch.setattr(ai_suggester, 'suggest_best_coin', lambda signals: 'ARPA_USDT')
+
+    # Run the core and capture results
+    results = asyncio.run(core.run())
+
+    # Assertions
+    assert len(results) == 1, "Should produce one signal"
+    # Two messages: trade + IA suggestion
+    assert len(notifier.sent) == 2, "Notifier should send two messages"
+
+    trade_msg = notifier.sent[0]
+    assert 'ARPA_USDT' in trade_msg, "Trade message must include symbol"
+
+    ia_msg = notifier.sent[1]
+    assert ia_msg.startswith('🤖 <b>Sugestão da IA'), "IA message formatting"

@@ -2,15 +2,16 @@ import sys
 import os
 import asyncio
 
+# Adiciona caminho do projeto
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from screener.screener_core import ScreenerCore
-from notifier.telegram_bot import TelegramBot
-from notifier.message_formatter import MessageFormatter
-from scheduler.job_scheduler import JobScheduler
+# Configura o logger ANTES de qualquer outro import que use bibliotecas verbosas (httpx, aiohttp, etc.)
 from utils.logger import AppLogger
-
 logger = AppLogger(__name__).get_logger()
+
+# Imports principais só após configurar o logger
+from screener.screener_core import ScreenerCore
+from scheduler.job_scheduler import JobScheduler
 
 async def run_screener_once():
     logger.info("Executando screener em modo de execução única...")
@@ -22,12 +23,9 @@ async def run_screener_once():
             logger.info("Nenhum resultado encontrado no screener.")
             return
 
-        telegram_bot = TelegramBot()
-        message = MessageFormatter.format_screener_results(results)
-        await telegram_bot.send_message(message)
         logger.info("Execução única do screener concluída.")
 
-    except Exception as e:
+    except Exception:
         logger.error("Erro ao executar screener", exc_info=True)
 
 async def run_scheduler():
@@ -50,6 +48,7 @@ async def cli():
 
 if __name__ == "__main__":
     try:
+        # Se já há um loop rodando, agendamos a execução
         loop = asyncio.get_running_loop()
     except RuntimeError:
         loop = None

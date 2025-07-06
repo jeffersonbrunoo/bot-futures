@@ -1,5 +1,3 @@
-# ai/ai_suggester.py
-
 import os
 from typing import List, Dict
 
@@ -7,22 +5,25 @@ PROVIDER = os.getenv("AI_PROVIDER", "openai")
 
 def build_technical_prompt(signals: List[Dict]) -> str:
     """
-    Monta um prompt detalhado para análise técnica, incluindo todos os dados do sinal.
+    Monta um prompt detalhado para análise técnica, incluindo todos os dados do sinal,
+    além de sentimento e volume anômalo.
     Garante que a resposta seja apenas o símbolo da moeda sugerida.
     """
     details = "\n".join(
-        f"{s['symbol']}: Entrada {s['entry_price']}, Stop {s['stop_loss']}, Alvo {s['take_profit']}"
+        f"{s["symbol"]}: Entrada {s["entry_price"]:.4f}, Stop {s["stop_loss"]:.4f}, Alvo {s["take_profit"]:.4f}, "
+        f"Volume Anômalo: {s.get("anomalous_volume", False)}, Sentimento: {s.get("sentiment", "neutro")}"
         for s in signals
     )
     prompt = (
         "Você é um analista técnico experiente e objetivo.\n"
         "Considere os seguintes sinais de short fornecidos por um screener automático:\n"
         f"{details}\n"
-        "Analise e compare esses ativos baseando-se apenas nos dados fornecidos (entrada, stop, alvo). "
+        "Analise e compare esses ativos baseando-se nos dados fornecidos (entrada, stop, alvo, volume anômalo, sentimento). "
         "Escolha **apenas um** ativo que oferece o melhor potencial de trade para short neste momento, considerando:\n"
         "- Relação risco/retorno (distância entre entrada, stop e alvo)\n"
         "- Proximidade do stop\n"
         "- Potencial de queda e qualquer detalhe técnico notável do setup\n"
+        "- **Fatores externos:** Se o volume for anômalo (True) e o sentimento for negativo, isso pode indicar um sinal mais forte para short.\n"
         "FAÇA toda a análise técnica mentalmente, mas **após decidir**, responda SOMENTE com o símbolo do ativo escolhido (ex: BTCUSDT), nada mais. "
         "Não escreva explicação, justificativa, motivo, frase, saudação ou texto adicional. "
         "Sua resposta final deve conter apenas o símbolo, exatamente como no exemplo: BTCUSDT"
@@ -80,3 +81,5 @@ else:
         prompt = build_technical_prompt(signals)
         out = _gen(prompt, max_length=20, do_sample=True, temperature=0.7)[0]["generated_text"]
         return out.replace(prompt, "").strip().split()[0]
+
+

@@ -16,7 +16,7 @@ from config.settings import (
     MEXC_SECRET_KEY,
     MEXC_BASE_URL,
     MEXC_WS_URL
-)
+ )
 from mexc.mexc_endpoints import MexcEndpoints
 from utils.logger import AppLogger
 
@@ -31,9 +31,9 @@ class MexcApiAsync:
         self.http = None
         self.ws = None
 
-    async def init(self):
+    async def init(self ):
         if not self.http:
-            self.http = aiohttp.ClientSession()
+            self.http = aiohttp.ClientSession( )
         return self
 
     @staticmethod
@@ -55,7 +55,7 @@ class MexcApiAsync:
         if self.ws:
             await self.ws.close()
         if self.http:
-            await self.http.close()
+            await self.http.close( )
 
     def _get_signature(self, timestamp: int, params: dict) -> str:
         param_str = "&".join(
@@ -87,7 +87,7 @@ class MexcApiAsync:
         for attempt in range(3):
             try:
                 async with self.http.request(
-                    method=method.upper(),
+                    method=method.upper( ),
                     url=url,
                     params=params if method.upper() == "GET" else None,
                     json=params if method.upper() == "POST" else None,
@@ -170,3 +170,5 @@ class MexcApiAsync:
         async for msg in self.ws:
             data = json.loads(msg)
             await callback(data)
+
+

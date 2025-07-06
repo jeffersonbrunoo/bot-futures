@@ -2,14 +2,12 @@ import asyncio
 import time
 import html
 from typing import List, Dict
+
 from utils.logger import AppLogger
 from mexc.mexc_api import MexcApiAsync
-from screener.filter_engine import (
-    filter_by_liquidez,
-    check_context,
-    calculate_resistance_h1,
-    check_trigger
-)
+from screener.liquidity_filter import LiquidityFilter  # Filtra símbolos por liquidez
+from screener.signal_generator import SignalGenerator  # Gera resistência, verifica contexto e gatilhos
+from screener.external_factors_evaluator import ExternalFactorsEvaluator
 from notifier.telegram_notifier import TelegramNotifier
 from notifier.message_formatter import MessageFormatter
 from telegram.constants import ParseMode
@@ -18,94 +16,113 @@ from config import settings
 logger = AppLogger(__name__).get_logger()
 
 # Configurações multi‐timeframe
-TIMEFRAME_TREND = settings.TIMEFRAME_TREND    # ex: "Min60"
-TIMEFRAME_ENTRY = settings.TIMEFRAME_ENTRY    # ex: "Min15"
-CANDLE_LIMIT   = settings.CANDLE_LIMIT        # nº de candles a buscar
-_PERIODS       = settings._PERIODS            # mapeamento de segundos por timeframe
+timeframe_trend = settings.TIMEFRAME_TREND    # ex: "Min60"
+timeframe_entry = settings.TIMEFRAME_ENTRY    # ex: "Min15"
+candle_limit = settings.CANDLE_LIMIT        # nº de candles a buscar
+_periods = settings._PERIODS                # mapeamento de segundos por timeframe
 
 class ScreenerCore:
-    def __init__(self, api: MexcApiAsync, notifier: TelegramNotifier):
+    def __init__(
+        self,
+        api: MexcApiAsync,
+        notifier: TelegramNotifier,
+        ext_evaluator: ExternalFactorsEvaluator
+    ):
         self.api = api
         self.notifier = notifier
+        self.ext_evaluator = ext_evaluator
+        self.liquidity_filter = LiquidityFilter(api)
+        self.signal_gen = SignalGenerator()
 
     @classmethod
     async def create(cls):
         api = await MexcApiAsync().init()
         notifier = TelegramNotifier()
-        return cls(api, notifier)
+        ext_evaluator = ExternalFactorsEvaluator()
+        return cls(api, notifier, ext_evaluator)
 
     async def run(self) -> List[dict]:
         logger.info("Iniciando screener assíncrono…")
         now = int(time.time())
 
         # calcula timestamps para cada timeframe
-        interval_trend = _PERIODS.get(TIMEFRAME_TREND, _PERIODS["Min60"])
-        interval_entry = _PERIODS.get(TIMEFRAME_ENTRY, _PERIODS["Min15"])
-        trend_start = now - CANDLE_LIMIT * interval_trend
-        entry_start = now - CANDLE_LIMIT * interval_entry
+        interval_trend = _periods.get(timeframe_trend, _periods["Min60"])
+        interval_entry = _periods.get(timeframe_entry, _periods["Min15"])
+        trend_start = now - candle_limit * interval_trend
+        entry_start = now - candle_limit * interval_entry
         trend_end = entry_end = now
 
         try:
-            # 1) Recupera contratos
+            # 1) Recupera contratos futuros USDT
             contracts = await self.api.get_futures_contracts()
             symbols = [c["symbol"] for c in contracts if c.get("symbol")]
             logger.info(f"Total de {len(symbols)} símbolos encontrados.")
 
-            # 2) Filtra por liquidez
-            liquid = await filter_by_liquidez(self.api, symbols)
+            # 2) Filtra por liquidez usando LiquidityFilter
+            liquid = await self.liquidity_filter.filter_by_liquidez(symbols)
             if not liquid and symbols:
                 liquid = symbols.copy()
                 logger.info("Nenhum símbolo passou no filtro de liquidez; aplicando todos.")
             logger.info(f"{len(liquid)} símbolos passarão nos filtros seguintes.")
 
-            # 3) Gera sinais (trend + entry)
+            # 3) Geração de sinais
             final_signals: List[dict] = []
             for sym in liquid:
                 try:
-                    # 3.1) Trend
-                    trend_klines = await self.api.get_klines(
-                        sym, interval=TIMEFRAME_TREND,
-                        start=trend_start, end=trend_end
+                    # 3.1) Trend timeframe
+                    trend_raw = await self.api.get_klines(
+                        sym,
+                        interval=timeframe_trend,
+                        start=trend_start,
+                        end=trend_end
                     )
-                    if not trend_klines:
+                    if not trend_raw:
                         continue
-                    trend_df = self.api.klines_to_dataframe(trend_klines, sym)
-                    if trend_df.empty or not check_context(trend_df):
+                    trend_df = self.api.klines_to_dataframe(trend_raw, sym)
+                    # verifica contexto de baixa e calcula resistência
+                    if trend_df.empty or not self.signal_gen.check_context(trend_df):
                         continue
-                    resistance = calculate_resistance_h1(trend_df)
+                    resistance = self.signal_gen.calculate_resistance_h1(trend_df)
 
-                    # 3.2) Entry
-                    entry_klines = await self.api.get_klines(
-                        sym, interval=TIMEFRAME_ENTRY,
-                        start=entry_start, end=entry_end
+                    # 3.2) Entry timeframe
+                    entry_raw = await self.api.get_klines(
+                        sym,
+                        interval=timeframe_entry,
+                        start=entry_start,
+                        end=entry_end
                     )
-                    if not entry_klines:
+                    if not entry_raw:
                         continue
-                    entry_df = self.api.klines_to_dataframe(entry_klines, sym)
+                    entry_df = self.api.klines_to_dataframe(entry_raw, sym)
                     if entry_df.empty:
                         continue
 
-                    signal = check_trigger(entry_df, resistance)
+                    # aplica gatilho técnico
+                    signal = self.signal_gen.check_trigger(entry_df, resistance)
                     if not signal:
                         continue
 
-                    # enriquecer com volume e tendência
-                    vols = entry_df["volume"].tail(5).tolist()
-                    avg_vol = sum(vols) / len(vols) if vols else 0
-                    closes = entry_df["close"].tail(5).tolist()
-                    trend_dir = "alta" if len(closes)>=2 and closes[-1]>closes[0] else "baixa"
+                    # 3.3) Avalia fatores externos (para uso da IA)
+                    factors = await self.ext_evaluator.evaluate_external_factors(sym, entry_df)
+                    signal.update(factors)
 
-                    signal.update({
-                        "volume": avg_vol,
-                        "liquidity": "alta",
-                        "trend": trend_dir
-                    })
+                    # 3.4) Enriquecer sinal com volume médio e direção da tendência
+                    recent_vols = entry_df['volume'].tail(5).tolist()
+                    avg_vol = sum(recent_vols) / len(recent_vols) if recent_vols else 0
+                    recent_closes = entry_df['close'].tail(5).tolist()
+                    trend_dir = (
+                        "alta"
+                        if len(recent_closes) >= 2 and recent_closes[-1] > recent_closes[0]
+                        else "baixa"
+                    )
+                    signal.update({"avg_volume": avg_vol, "trend": trend_dir})
+
                     final_signals.append(signal)
 
                 except Exception as e:
                     logger.warning(f"Erro processando {sym}: {e}")
 
-            # 4) Envia cada sinal separadamente (HTML)
+            # 4) Envia cada sinal individualmente (HTML)
             for sig in final_signals:
                 html_msg = MessageFormatter.format_trade_signal(
                     symbol=sig["symbol"],
@@ -116,7 +133,7 @@ class ScreenerCore:
                 )
                 await self.notifier.send_message(html_msg, parse_mode=ParseMode.HTML)
 
-            # 5) Sugestão da IA (se houver sinais)
+            # 5) Sugestão da IA baseada em todos os sinais
             if final_signals:
                 try:
                     from ai.ai_suggester import suggest_best_coin
@@ -129,7 +146,7 @@ class ScreenerCore:
                 except Exception as e:
                     logger.warning(f"Erro ao obter sugestão da IA: {e}")
 
-            logger.info(f"{len(final_signals)} sinais enviados ao Telegram.")
+            logger.info(f"{len(final_signals)} sinais processados. Mensagens enviadas ao Telegram.")
             return final_signals
 
         except Exception as e:
@@ -162,4 +179,4 @@ class ScreenerCore:
 
 
 if __name__ == "__main__":
-    asyncio.run(ScreenerCore.create().then(lambda c: c.run()))
+    asyncio.run(ScreenerCore.create().run())

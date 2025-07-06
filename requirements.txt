@@ -1,8 +1,11 @@
 requests
 python-dotenv
-pandas
+pandas>=1.5.0
 schedule
 numpy
-python-telegram-bot
-google-generativeai>=0.1.0
+python-telegram-bot>=13.15
+google-generativeai>=0.2.0
+aiohttp>=3.8.0
+websockets>=10.0
+textblob>=0.17.1
 

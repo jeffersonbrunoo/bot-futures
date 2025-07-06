@@ -1,5 +1,7 @@
 # mexc/mexc_utils.py
 
+# mexc/mexc_utils.py
+
 import pandas as pd
 from utils.logger import AppLogger
 
@@ -54,7 +56,7 @@ class MexcUtils:
             df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
             df = df.set_index("timestamp").sort_index()
         else:
-            logger.warning("Campo 'timestamp' não encontrado nos dados de kline.")
+            logger.warning("Campo \'timestamp\' não encontrado nos dados de kline.")
         return df
 
     @staticmethod
@@ -86,3 +88,5 @@ class MexcUtils:
             "volume_24h_usd": volume_24h_usd,
             "open_interest_usd": open_interest_usd
         }
+
+
