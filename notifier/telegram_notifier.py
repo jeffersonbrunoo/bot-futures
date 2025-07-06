@@ -33,7 +33,7 @@ class TelegramNotifier:
                 parse_mode=parse_mode,
                 disable_web_page_preview=True,
             )
-            logger.info("Mensagem enviada com sucesso para o Telegram.")
+            # Sucesso no envio: não logar para evitar poluição do terminal
         except Exception as e:
             logger.error(
                 f"Erro ao enviar mensagem para o Telegram: {e}\nCorpo da mensagem: {repr(message)}"
