@@ -1,7 +1,9 @@
+# notifier/telegram_notifier.py
+
 from telegram.constants import ParseMode
-from config.telegram_config import TelegramConfig
 from telegram import Bot
 from utils.logger import AppLogger
+from config.telegram_config import TelegramConfig
 from notifier.message_formatter import MessageFormatter
 from typing import List, Union, Dict, Any
 
@@ -10,6 +12,7 @@ logger = AppLogger(__name__).get_logger()
 class TelegramNotifier:
     def __init__(self):
         self.bot_token = TelegramConfig.BOT_TOKEN
+        # chat_id padrão (pode ser usado para notificações genéricas)
         self.chat_id = TelegramConfig.CHAT_ID
 
         if not self.bot_token or not self.chat_id:
@@ -19,9 +22,9 @@ class TelegramNotifier:
             self.bot = Bot(token=self.bot_token)
             self.is_configured = True
 
-    async def send_message(self, message: str, parse_mode=ParseMode.MARKDOWN_V2):
+    async def send_message(self, message: str, parse_mode: ParseMode = ParseMode.MARKDOWN_V2):
         """
-        Envia uma mensagem para o Telegram usando Markdown V2 escapado.
+        Envia uma mensagem para o Telegram (chat_id padrão).
         """
         if not self.is_configured:
             logger.warning("Telegram Bot não configurado. Pulando envio de mensagem.")
@@ -33,11 +36,40 @@ class TelegramNotifier:
                 parse_mode=parse_mode,
                 disable_web_page_preview=True,
             )
-            # Sucesso no envio: não logar para evitar poluição do terminal
         except Exception as e:
-            logger.error(
-                f"Erro ao enviar mensagem para o Telegram: {e}\nCorpo da mensagem: {repr(message)}"
+            logger.error(f"Erro ao enviar mensagem para o Telegram: {e}\n{repr(message)}")
+
+    async def send_tech(self, message: str, parse_mode: ParseMode = ParseMode.MARKDOWN_V2):
+        """
+        Envia sinal técnico para o canal VIP de sinais TECH.
+        """
+        if not self.is_configured:
+            return
+        try:
+            await self.bot.send_message(
+                chat_id=TelegramConfig.CHAT_ID_TECH,
+                text=message,
+                parse_mode=parse_mode,
+                disable_web_page_preview=True,
             )
+        except Exception as e:
+            logger.error(f"Erro ao enviar sinal TECH: {e}\n{repr(message)}")
+
+    async def send_ai(self, message: str, parse_mode: ParseMode = ParseMode.MARKDOWN_V2):
+        """
+        Envia sugestão da IA para o canal VIP de sinais AI.
+        """
+        if not self.is_configured:
+            return
+        try:
+            await self.bot.send_message(
+                chat_id=TelegramConfig.CHAT_ID_AI,
+                text=message,
+                parse_mode=parse_mode,
+                disable_web_page_preview=True,
+            )
+        except Exception as e:
+            logger.error(f"Erro ao enviar sugestão AI: {e}\n{repr(message)}")
 
     def format_trade_signal(
         self,
@@ -47,9 +79,6 @@ class TelegramNotifier:
         take_profit: float,
         indicators: Dict[str, Any]
     ) -> str:
-        """
-        Wrapper para format_trade_signal do MessageFormatter.
-        """
         return MessageFormatter.format_trade_signal(
             symbol=symbol,
             entry=entry,
@@ -63,10 +92,7 @@ class TelegramNotifier:
         results: List[Union[Dict[str, Any], tuple]],
         suggestion: str = None
     ) -> str:
-        """
-        Formata o conjunto de sinais (e sugestão da IA) em um único bloco de texto.
-        """
         return MessageFormatter.format_screener_results(results, suggestion)
 
-# Alias para compatibilidade com o import em main.py
+# Alias legacy
 TelegramBot = TelegramNotifier

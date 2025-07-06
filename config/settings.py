@@ -32,7 +32,8 @@ MEXC_WS_URL       = _get_env("MEXC_WS_URL", "wss://contract.mexc.com/edge")
 TELEGRAM_BOT_TOKEN = _get_env("TELEGRAM_BOT_TOKEN")
 # Converte para int; falha rápido em caso de valor inválido
 TELEGRAM_CHAT_ID   = int(_get_env("TELEGRAM_CHAT_ID"))
-
+TELEGRAM_CHAT_ID_TECH = int(_get_env("TELEGRAM_CHAT_ID_TECH"))
+TELEGRAM_CHAT_ID_AI = int(_get_env("TELEGRAM_CHAT_ID_AI"))
 
 # --- Configurações do Screener ---
 MIN_VOLUME_24H_USD    = float(_get_env("MIN_VOLUME_24H_USD", "1000"))

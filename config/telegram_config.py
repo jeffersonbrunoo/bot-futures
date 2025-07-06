@@ -1,9 +1,11 @@
 # config\telegram_config.py
 
-from config.settings import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+from config.settings import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_CHAT_ID_TECH, TELEGRAM_CHAT_ID_AI
 
 class TelegramConfig:
     BOT_TOKEN = TELEGRAM_BOT_TOKEN
     CHAT_ID = TELEGRAM_CHAT_ID
+    CHAT_ID_TECH = TELEGRAM_CHAT_ID_TECH
+    CHAT_ID_AI = TELEGRAM_CHAT_ID_AI
 
 

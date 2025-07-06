@@ -1,63 +1,45 @@
-import time
-import schedule
 import asyncio
-from threading import Thread
 from config.settings import SCHEDULER_INTERVAL_MINUTES
 from screener.screener_core import ScreenerCore
 from utils.logger import AppLogger
 
 logger = AppLogger(__name__).get_logger()
 
-def run_screener_job():
-    """
-    Executa o screener em uma thread isolada com seu próprio event loop.
-    """
-    def _run():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(run_screener_job_async())
-        finally:
-            loop.close()
-
-    thread = Thread(target=_run)
-    thread.start()
-
-
 async def run_screener_job_async():
     """
     Executa o screener de forma assíncrona.
     """
-    logger.info("Iniciando job do screener...")
-    screener = await ScreenerCore.create()
-    await screener.run()
-    logger.info("Job do screener concluído.")
-
+    try:
+        logger.info("Iniciando execução do Screener...")
+        screener = await ScreenerCore.create()
+        await screener.run()
+        logger.info("Execução do Screener concluída.")
+    except Exception as e:
+        logger.error(f"Erro durante o Screener agendado: {e}", exc_info=True)
 
 class JobScheduler:
+    """
+    Scheduler que executa o Screener periodicamente utilizando apenas asyncio.
+    """
     def __init__(self):
         self.interval_minutes = SCHEDULER_INTERVAL_MINUTES
+        self._stop = False
 
     async def start(self):
-        logger.info(f"Agendando screener para rodar a cada {self.interval_minutes} minutos...")
-        schedule.every(self.interval_minutes).minutes.do(run_screener_job)
+        """
+        Inicia o loop de agendamento: executa imediatamente e depois a cada intervalo.
+        """
+        logger.info(f"Agendando Screener a cada {self.interval_minutes} minutos...")
+        # execução imediata
+        await run_screener_job_async()
 
-        run_screener_job()  # roda na inicialização
+        # loop periódico
+        while not self._stop:
+            await asyncio.sleep(self.interval_minutes * 60)
+            await run_screener_job_async()
 
-        self._run_continuously()
-
-        try:
-            while True:
-                await asyncio.sleep(1)
-        except KeyboardInterrupt:
-            logger.info("Scheduler parado pelo usuário.")
-
-    def _run_continuously(self, interval=1):
-        thread = Thread(target=self._schedule_loop, args=(interval,))
-        thread.daemon = True
-        thread.start()
-
-    def _schedule_loop(self, interval):
-        while True:
-            schedule.run_pending()
-            time.sleep(interval)
+    def stop(self):
+        """
+        Sinaliza para parar o agendamento após a iteração atual.
+        """
+        self._stop = True
