@@ -1,10 +1,9 @@
+# screener/liquidity_filter.py
+
 import asyncio
 from typing import List, Optional
 
-from config.settings import (
-    MIN_VOLUME_24H_USD,
-    MIN_OPEN_INTEREST_USD
-)
+from config.settings import MIN_VOLUME_24H_USD, MIN_OPEN_INTEREST_USD
 from mexc.mexc_api import MexcApiAsync
 from utils.logger import AppLogger
 
@@ -22,10 +21,9 @@ class LiquidityFilter:
             async with sem:
                 try:
                     vol, oi = await self.api.obter_liquidez(sym)
-                    logger.debug(f"{sym} - Vol: {vol}, OI: {oi}")
+                    logger.debug(f"{sym} – Vol: {vol}, OI: {oi}")
                     if vol >= MIN_VOLUME_24H_USD and oi >= MIN_OPEN_INTEREST_USD:
                         return sym
-                    # mark as failed
                     failed_syms.append(sym)
                     return None
                 except Exception as e:
@@ -37,10 +35,9 @@ class LiquidityFilter:
         results = await asyncio.gather(*tasks)
         passed = [r for r in results if r]
 
-        # Inform only count
+        # Mantém apenas um log em INFO com a quantidade de aprovados
         logger.info(f"{len(passed)} símbolos passaram no filtro de liquidez.")
-        # Detailed failures kept at debug level
-        if failed_syms:
-            logger.debug(f"Símbolos excluídos por liquidez insuficiente ou erro: {failed_syms}")
+        # Detalhes dos reprovados só em DEBUG (não aparecem se LOG_LEVEL=INFO)
+        logger.debug(f"Símbolos excluídos por liquidez insuficiente ou erro: {failed_syms}")
 
         return passed
