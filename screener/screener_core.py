@@ -15,6 +15,7 @@ from config import settings
 
 # Import do sugeridor da IA
 from ai.ai_suggester import suggest_best_coin
+from reports.performance import log_signal
 
 logger = AppLogger(__name__).get_logger()
 
@@ -133,6 +134,7 @@ class ScreenerCore:
 
             # 5) Sugestões da IA (escolha de até dois ativos)
             if final_signals:
+                tickers = []
                 try:
                     response = suggest_best_coin(final_signals)
                     # Se a IA retornar lista, usá-la diretamente; se for string, dividir por vírgula
@@ -157,6 +159,10 @@ class ScreenerCore:
                         await self.notifier.send_ai(ai_msg, parse_mode=ParseMode.HTML)
                 except Exception:
                     logger.warning("Erro ao obter/enviar sugestão da IA:", exc_info=True)
+
+                # 6) Log de performance dos sinais (timestamp, symbol, entry, SL, TP e sugestão)
+                for sig in final_signals:
+                    log_signal(sig, tickers)
 
             logger.info(f"{len(final_signals)} sinais processados. Mensagens enviadas aos canais VIP.")
             return final_signals
