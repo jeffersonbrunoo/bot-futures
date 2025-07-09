@@ -85,4 +85,10 @@ LOG_LEVEL = _get_env("LOG_LEVEL", "INFO")
 
 
 # --- Configurações do Scheduler ---
-SCHEDULER_INTERVAL_MINUTES = int(_get_env("SCHEDULER_INTERVAL_MINUTES", "5"))  # em minutos
+SCHEDULER_INTERVAL_MINUTES = int(_get_env("SCHEDULER_INTERVAL_MINUTES", "60"))  # em minutos
+
+# --- Configurações da IA(Notícias) ---
+NEWS_API_KEY: str = os.getenv("NEWS_API_KEY", "")
+NEWS_LOOKBACK_DAYS: int = int(os.getenv("NEWS_LOOKBACK_DAYS", 1))
+NEWS_PAGE_SIZE: int = int(os.getenv("NEWS_PAGE_SIZE", 5))
+

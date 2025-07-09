@@ -1,33 +1,26 @@
 import os
 from typing import List, Dict
+from config.settings import NEWS_LOOKBACK_DAYS, NEWS_PAGE_SIZE
 
 PROVIDER = os.getenv("AI_PROVIDER", "openai")
 
+
 def build_technical_prompt(signals: List[Dict]) -> str:
-    """
-    Monta um prompt detalhado para análise técnica, incluindo todos os dados do sinal,
-    além de sentimento e volume anômalo.
-    Garante que a resposta seja apenas os símbolos das duas moedas sugeridas.
-    """
-    details = "\n".join(
-        f"{s['symbol']}: Entrada {s['entry_price']:.4f}, Stop {s['stop_loss']:.4f}, Alvo {s['take_profit']:.4f}, "
-        f"Volume Anômalo: {s.get('anomalous_volume', False)}, Sentimento: {s.get('sentiment', 'neutro')}"
-        for s in signals
-    )
+    details = []
+    for s in signals:
+        details.append(
+            f"{s['symbol']}: Entrada {s['entry_price']:.4f}, Stop {s['stop_loss']:.4f}, "
+            f"Alvo {s['take_profit']:.4f}, Volume Anômalo: {s.get('anomalous_volume', False)} "
+            f"(z={s.get('anomalous_volume_z',0)}), Sentimento: {s.get('sentiment','neutro')}, "
+            f"Notícias: {s.get('news_count',0)} artigos"
+        )
     prompt = (
         "Você é um analista técnico experiente e objetivo.\n"
-        "Considere os seguintes sinais de short fornecidos por um screener automático:\n"
-        f"{details}\n"
-        "Analise e compare esses ativos baseando-se nos dados fornecidos "
-        "(entrada, stop, alvo, volume anômalo, sentimento).\n"
-        "Escolha **exatamente dois** ativos que oferecem o melhor potencial de trade para short "
-        "neste momento, considerando:\n"
-        "- Relação risco/retorno\n"
-        "- Proximidade do stop\n"
-        "- Potencial de queda e forças vindas de fatores externos\n"
-        "FAÇA toda a análise mentalmente, mas **após decidir**, responda **SOMENTE** com os símbolos "
-        "dos dois ativos, separados por vírgula, sem texto adicional. "
-        "Exemplo de resposta: BTCUSDT,ETHUSDT"
+        f"Considere os sinais de short a seguir com fatores externos nos últimos {NEWS_LOOKBACK_DAYS} dia(s) (até {NEWS_PAGE_SIZE} artigos por símbolo):\n"
+        + "\n".join(details) + "\n"
+        "Analise entrada, stop, alvo, volume anômalo e sentimento de notícias. "
+        "Escolha **exatamente dois** ativos com melhor potencial de short, considerando relação risco/retorno, proximidade do stop e força das notícias.\n"
+        "Responda **SOMENTE** com os símbolos, separados por vírgula, sem texto adicional."
     )
     return prompt
 
@@ -41,14 +34,13 @@ if PROVIDER == "openai":
         resp = openai.ChatCompletion.create(
             model=MODEL,
             messages=[
-                {"role": "system", "content": "Auxilie na escolha dos dois melhores ativos para short."},
+                {"role": "system", "content": "Você sugere os dois melhores ativos para short."},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.7,
-            max_tokens=20,  # deve caber dois tickers
+            max_tokens=50,
         )
         text = resp.choices[0].message.content.strip()
-        # Extrai até 2 símbolos, limpando espaços e quebras
         parts = [t.strip() for t in text.replace("\n", "").split(",") if t.strip()]
         return parts[:2]
 
@@ -61,14 +53,18 @@ elif PROVIDER == "gemini":
         generation_config={"temperature": 0.7}
     )
 
-    def suggest_best_coin(signals: List[Dict]) -> List[str]:
+    def suggest_best_coins(signals: List[Dict]) -> List[str]:
         prompt = build_technical_prompt(signals)
+        # Usar generate_content no SDK do Gemini
         response = gemini.generate_content(prompt)
-        text = ""
-        if hasattr(response, "text"):
+        # Extrai texto da resposta
+        if hasattr(response, "text") and response.text:
             text = response.text
         elif hasattr(response, "candidates") and response.candidates:
+            # .candidates[0].content.parts[0].text
             text = response.candidates[0].content.parts[0].text
+        else:
+            text = ""
         parts = [t.strip() for t in text.replace("\n", "").split(",") if t.strip()]
         return parts[:2]
 
@@ -79,8 +75,11 @@ else:
 
     def suggest_best_coins(signals: List[Dict]) -> List[str]:
         prompt = build_technical_prompt(signals)
-        out = _gen(prompt, max_length=30, do_sample=True, temperature=0.7)[0]["generated_text"]
-        # remove o prompt e pegue rest
+        out = _gen(prompt, max_length=50, do_sample=True, temperature=0.7)[0]["generated_text"]
+        # remove prompt do retorno
         generated = out.replace(prompt, "").strip()
         parts = [t.strip() for t in generated.replace("\n", "").split(",") if t.strip()]
         return parts[:2]
+
+# Alias para compatibilidade com chamadas anteriores
+suggest_best_coin = suggest_best_coins
