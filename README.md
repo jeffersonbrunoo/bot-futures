@@ -1,162 +1,154 @@
-Monitor de Futuros MEXC
+# 🤖 BOT TECH + IA – Screener de Sinais para Futuros (Cripto)
 
-Uma aplicação Python para monitorar contratos futuros perpétuos na MEXC, filtrar por liquidez, aplicar análise técnica para detectar gatilhos de entrada em posições vendidas (short) e enviar notificações via Telegram.
+Este projeto é um **screener** para contratos **futuros** perpétuos na MEXC, combinando **análise técnica tradicional** com **inteligência artificial** para filtrar e notificar os melhores setups de entrada no mercado.
 
-Estrutura do Projeto
+---
 
-Plain Text
+## 🚀 Visão Geral
 
+O bot realiza uma varredura periódica nos pares disponíveis na exchange **MEXC** , aplicando critérios rigorosos como:
 
-monitor-futuros-mexc/
-├── config/          # settings.py, telegram_config.py
-├── mexc/            # mexc_api.py, mexc_endpoints.py, mexc_utils.py
-├── indicators/      # ema.py, rsi.py, macd.py, volume.py
-├── screener/        # liquidez.py, filtros.py, screener_core.py
-├── notifier/        # telegram_bot.py, message_formatter.py
-├── scheduler/       # job_scheduler.py
-├── utils/           # logger.py
-├── main.py
-├── requirements.txt
-├── Dockerfile       # opcional para containerização
-└── README.md        # instruções de instalação, configuração e uso
+- Liquidez mínima
+- Indicadores técnicos (EMA, RSI, MACD, Volume)
+- Validação por IA (modelo generativo)
+- Filtros de volatilidade e contexto de mercado
+- Fatores externos
 
+Ao identificar um **setup de venda (SHORT)** com alta probabilidade, o bot envia o sinal diretamente para o Telegram do usuário.
 
-Funcionalidades
+---
 
-•
-Lista contratos futuros perpétuos ativos da MEXC.
+## 🧠 Estrutura do Projeto
 
-•
-Filtra por liquidez (volume 24h e open interest).
+```
+📦 BOT-FUTURES/
+├── __pycache__/
+├── .pytest_cache/
+├── ai/
+│   ├── __pycache__/
+│   ├── __init__.py
+│   └── ai_suggester.py
+├── config/
+├── external_data/
+├── mexc/
+├── notifier/
+├── reports/
+│   ├── __pycache__/
+│   ├── daily/
+│   └── performance.py
+├── scheduler/
+│   ├── __pycache__/
+│   ├── __init__.py
+│   └── job_scheduler.py
+├── screener/
+│   ├── __pycache__/
+│   ├── __init__.py
+│   ├── external_factors_evaluator.py
+│   ├── filter_engine.py
+│   ├── liquidity_filter.py
+│   ├── screener_core.py
+│   └── signal_generator.py
+```
 
-•
-Baixa candles OHLCV em timeframe configurável.
+- `filters/`: lógica de filtragem por análise técnica
+- `screener/`: cálculo de RSI, MACD, EMAs, Volume, Fatores Externos
+- `ai/`: integração com modelo IA para validação dos sinais
+- `notifier/`: envio automático dos sinais para Telegram
+- `scheduler/`: agenda execuções recorrentes (ex: a cada 60 minutos)
 
-•
-Calcula indicadores de análise técnica (EMA, RSI, MACD, Média de Volume).
+---
 
-•
-Detecta gatilhos de entrada em posições vendidas (short) com base em múltiplos critérios:
+## 📊 Indicadores Técnicos Utilizados
 
-•
-Preço abaixo de EMA curta < EMA longa.
+- **EMA Curta e Longa**: cruzamento de médias móveis
+- **RSI (14)**: identifica sobrecompra e sobrevenda
+- **MACD e Signal**: tendência e momentum
+- **Volume x Média de Volume**: validação de força da movimentação
 
-•
-RSI abaixo de 50.
+---
 
-•
-Cruzamento de MACD para baixo da linha de sinal.
+## 🧠 Validação com Inteligência Artificial
 
-•
-Volume do último candle acima da média dos N últimos.
+A IA utilizada (via Google Generative AI) recebe os dados técnicos filtrados e valida a **confluência e qualidade do sinal** antes de ser enviado. Isso reduz ruído e aumenta a assertividade.
 
-•
-Fechamento abaixo da mínima dos 3 candles anteriores.
+---
 
+## 📦 Requisitos
 
+- Python 3.9+
+- Conta no Telegram e bot token
+- Conta no Google Cloud para usar o modelo generativo
 
-•
-Envia notificações formatadas via Telegram Bot.
+---
 
-•
-Possui scheduler interno para execução periódica.
+## 🔧 Instalação
 
-•
-Configurações parametrizáveis via variáveis de ambiente e arquivo .env.
+```bash
+git clone git@github.com:jeffersonbrunoo/bot-futures.git
+cd bot-futures
+pip install -r requirements.txt
+```
 
-•
-Inclui logging, tratamento de erros e paralelização para desempenho.
+Configure o arquivo `.env` com suas credenciais:
 
-Instalação
+```env
+TELEGRAM_TOKEN=xxxxxxxxx
+TELEGRAM_CHAT_ID=xxxxxxxxx
+GOOGLE_API_KEY=xxxxxxxxx
+```
 
-1.
-Clone o repositório:
+---
 
-2.
-Crie e ative um ambiente virtual (recomendado):
+## 🕒 Agendamento de Execuções
 
-3.
-Instale as dependências:
+Para rodar a cada 60 minutos:
 
-Configuração
+```bash
+python scheduler/main.py
+```
 
-Crie um arquivo .env na raiz do projeto (monitor-futuros-mexc/.env) com as seguintes variáveis de ambiente:
+Para manter em produção, use ferramentas como:
 
-Plain Text
+- **PM2**
+- **Cron**
+- **Google Cloud Scheduler**
 
+---
 
-# MEXC API
-MEXC_API_KEY=SUA_API_KEY_MEXC
-MEXC_SECRET_KEY=SUA_SECRET_KEY_MEXC
+## 📲 Exemplo de Sinal no Telegram
 
-# Telegram Bot
-TELEGRAM_BOT_TOKEN=SEU_BOT_TOKEN_TELEGRAM
-TELEGRAM_CHAT_ID=SEU_CHAT_ID_TELEGRAM
+```
+🚨 SINAL DE VENDA IDENTIFICADO 🚨
 
-# Screener Settings
-MIN_VOLUME_24H_USD=10000000  # Volume mínimo em USD nas últimas 24h (ex: 10 milhões)
-MIN_OPEN_INTEREST_USD=50000000 # Open Interest mínimo em USD (ex: 50 milhões)
-TIMEFRAME=15m               # Timeframe dos candles (ex: 1m, 5m, 15m, 1h, 4h, 1d)
-CANDLE_LIMIT=200             # Número de candles para baixar
+Símbolo: BTC_USDT
+Entrada: 64.200
+Stop Loss: 65.300 ❌
+Take Profit: 61.000 ✅
 
-# Indicator Settings
-EMA_SHORT_PERIOD=9
-EMA_LONG_PERIOD=21
-RSI_PERIOD=14
-MACD_FAST_PERIOD=12
-MACD_SLOW_PERIOD=26
-MACD_SIGNAL_PERIOD=9
-VOLUME_MA_PERIOD=20
+📊 Indicadores Técnicos:
+• EMA Curta: 63.800
+• EMA Longa: 64.700
+• RSI(14): 41.3
+• MACD: -0.18 vs Signal: -0.11
+• Volume: 450.000 > MA(375.000)
 
-# Logging Settings
-LOG_LEVEL=INFO               # Nível de log (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+📎 Validado por IA: SIM ✅
+```
 
-# Scheduler Settings
-SCHEDULER_INTERVAL_MINUTES=60 # Intervalo em minutos para rodar o screener no modo scheduler
+---
 
+## 💡 Próximos Passos
 
-•
-MEXC API Key/Secret: Obtenha suas chaves API na sua conta MEXC.
+- Implementar operações automatizadas com API da exchange
+- Módulo de backtesting com métricas de desempenho
+- Dashboard para acompanhar sinais e resultados
 
-•
-Telegram Bot Token: Crie um bot no Telegram via BotFather e obtenha o token.
+---
 
-•
-Telegram Chat ID: Inicie uma conversa com seu bot e use a API do Telegram para obter seu chat_id. Você pode enviar uma mensagem para https://api.telegram.org/bot<SEU_BOT_TOKEN>/getUpdates e procurar por "chat":{"id":...}.
+## 👨‍💻 Autor
 
-Uso
+Desenvolvido por Jefferson Bruno(https://www.linkedin.com/in/jbsoousa)  
+📩 Contato: bruunosoousaa@gmail.com
 
-Você pode rodar a aplicação de duas formas:
-
-1. Modo Screener (Execução Única)
-
-Executa o screener uma única vez e envia os resultados para o Telegram.
-
-Bash
-
-
-python main.py screener
-
-
-2. Modo Scheduler (Execução Periódica)
-
-Inicia o scheduler que rodará o screener em intervalos definidos pela variável SCHEDULER_INTERVAL_MINUTES no seu arquivo .env.
-
-Bash
-
-
-python main.py scheduler
-
-
-Para parar o scheduler, pressione Ctrl+C.
-
-Containerização com Docker (Opcional)
-
-Você pode construir e rodar a aplicação usando Docker para um ambiente isolado e fácil de implantar.
-
-1.
-Construa a imagem Docker:
-
-2.
-Execute o contêiner:
+---
 

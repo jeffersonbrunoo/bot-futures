@@ -9,3 +9,4 @@ venv/
 env/
 ENV/
 .env
+signals_log/
